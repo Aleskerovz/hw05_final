@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Об авторе проекта{% endblock %}
+{% block content %}
+{% load static %}
+  <style type="text/css">
+    img {
+      max-width: 50%;
+      max-height: 100%;
+    }
+    h1 {
+      font-size: 50px;
+      margin-top: 30px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 40px;
+      margin-bottom: 20px;
+    }
+    p {
+      font-size: 18px;
+    }
+  </style>
+  <div class="container" >
+    <div class="row">
+      <div class="col-12">
+        <h1>Привет, меня зовут Заур</h1>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="row">
+      <div class="col-12 col-sm-12 col-md-6 col-lg-6 col-xl-6">
+        <p>
+          Я начинающий Python-разработчик и это мой первый проект.<br>
+          Программирование всегда было мне интересно, но серьёзно решил заняться
+          лишь в 2022 году.<br>
+          Планирую развивать данный проект, поэтому жду от вас обратной связи!
+        </p>
+      </div>
+      <div class="col-12 col-sm-12 col-md-6 col-lg-6 col-xl-6">
+        <img src="{% static 'img/desktop.jpeg' %}" >
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <h2>Контакты для связи</h2>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <p>Телефон: +7 (912) 888-88-88</p>
+        <p>Почта: <a href="mailto: aleskerovz@ya.ru">aleskerovz@ya.ru</a></p>
+        <p>Телеграм: <a href="https://t.me/aleskerov">@aleskerov</a></p>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Главная страница Yatube{% endblock title %}
+{% load cache %}
+{% cache 1 index_page %}
+  {% block content %}
+    <div class="container py-5">     
+      <h1>Последние обновления на сайте</h1>
+      {% include 'posts/includes/switcher.html' %}
+      {% for post in page_obj %}
+        {% include 'includes/post_descript.html' with group_link=True author_link=True %}
+      {% endfor %}
+      {% include 'posts/includes/paginator.html' %} 
+    </div>  
+  {% endblock %}
+{% endcache %}
