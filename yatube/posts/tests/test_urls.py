@@ -95,3 +95,20 @@ class PostURLTests(TestCase):
         response = self.authorized_client2.get('/posts/1/edit/')
         self.assertRedirects(
             response, '/posts/1/', status_code=HTTPStatus.FOUND)
+
+    def test_follow_page_available_for_authenticated_user(self):
+        """Страница /follow/ доступна авторизованному пользователю."""
+        response = self.authorized_client.get('/follow/')
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+
+    def test_follow_page_unavailable_for_guest_user(self):
+        """Страница /follow// недоступна гостю."""
+        response = self.guest_client.get('/follow/')
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        self.assertRedirects(response, '/auth/login/?next=/follow/')
+
+    def test_follow_page_uses_correct_template(self):
+        """URL-адрес /follow/ для авторизованного пользователя
+        использует соответствующий шаблон."""
+        response = self.authorized_client.get('/follow/')
+        self.assertTemplateUsed(response, 'posts/follow.html')

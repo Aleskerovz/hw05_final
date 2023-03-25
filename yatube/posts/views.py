@@ -3,7 +3,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import CommentForm, PostForm
-from .models import Comment, Follow, Group, Post, User
+from .models import Follow, Group, Post, User
 
 AMOUNT_OF_ELEMENTS = 10
 
@@ -38,10 +38,8 @@ def profile(request, username):
     author = get_object_or_404(User, username=username)
     posts = author.posts.select_related('group')
     page_obj = paginator(request=request, posts=posts)
-    following = False
-    if request.user.is_authenticated:
-        following = Follow.objects.filter(
-            user=request.user, author=author).exists()
+    following = request.user.is_authenticated and Follow.objects.filter(
+        user=request.user, author=author).exists()
     context = {
         'author': author,
         'page_obj': page_obj,
@@ -52,8 +50,8 @@ def profile(request, username):
 
 def post_detail(request, post_id):
     post = get_object_or_404(Post, pk=post_id)
-    comments = Comment.objects.filter(post=post)
-    form = CommentForm(request.POST or None)
+    comments = post.comments.all()
+    form = CommentForm()
     context = {
         'post': post,
         'comments': comments,
@@ -64,7 +62,9 @@ def post_detail(request, post_id):
 
 @login_required
 def post_create(request):
-    form = PostForm(request.POST or None)
+    form = PostForm(
+        request.POST or None,
+        files=request.FILES or None)
     if form.is_valid():
         post = form.save(commit=False)
         post.author = request.user
@@ -86,7 +86,6 @@ def post_edit(request, post_id):
         post.save()
         return redirect('posts:post_detail', post_id)
     context = {
-        'post': post,
         'form': form,
         'is_edit': True,
     }
@@ -95,7 +94,7 @@ def post_edit(request, post_id):
 
 @login_required
 def add_comment(request, post_id):
-    post = Post.objects.get(id=post_id)
+    post = get_object_or_404(Post, id=post_id)
     form = CommentForm(request.POST or None)
     if form.is_valid():
         comment = form.save(commit=False)
@@ -109,9 +108,11 @@ def add_comment(request, post_id):
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     page_obj = paginator(request=request, posts=posts)
-    context = {
-        'page_obj': page_obj,
-    }
+    context = {}
+    if page_obj is not None:
+        context = {
+            'page_obj': page_obj,
+        }
     return render(request, 'posts/follow.html', context)
 
 

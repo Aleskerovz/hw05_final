@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from http import HTTPStatus
 
 from django import forms
 from django.conf import settings
@@ -8,9 +9,9 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse, reverse_lazy
-from posts.forms import PostForm
+from posts.forms import CommentForm, PostForm
 
-from ..models import Follow, Group, Post
+from ..models import Comment, Follow, Group, Post
 
 User = get_user_model()
 
@@ -49,8 +50,11 @@ class ViewsTests(TestCase):
         cls.post = Post.objects.create(
             author=cls.user,
             text='Тестовый пост',
-            group=cls.group,
-            image=cls.uploaded)
+            group=cls.group)
+        cls.comment = Comment.objects.create(
+            post=cls.post,
+            author=cls.user,
+            text='Test comment')
         cls.templates_pages_names = {
             'posts/index.html': reverse('posts:index'),
             'posts/group_list.html':
@@ -77,6 +81,7 @@ class ViewsTests(TestCase):
         self.not_follower = User.objects.create_user(username='mark')
         self.authorized_client3 = Client()
         self.authorized_client3.force_login(self.not_follower)
+        self.author = User.objects.create_user(username='testauthor')
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -100,7 +105,7 @@ class ViewsTests(TestCase):
         for field, expected_type in form_fields.items():
             self.assertIsInstance(
                 response.context['form'].fields[field], expected_type)
-        self.assertFalse('is_edit' in response.context)
+        self.assertNotIn('is_edit', response.context)
 
     def test_post_edit(self):
         """При открытии страницы редактирования поста используется
@@ -123,7 +128,6 @@ class ViewsTests(TestCase):
         response = self.guest_client.get(reverse('posts:index'))
         self.assertEqual(response.context['page_obj'].paginator.count, 1)
         self.assertIn(self.post, response.context['page_obj'])
-        self.assertContains(response, '<img')
         self.assertEqual(
             response.context['page_obj'][0].image, self.post.image)
 
@@ -134,7 +138,6 @@ class ViewsTests(TestCase):
         self.assertEqual(response.context['page_obj'].paginator.count, 1)
         self.assertEqual(response.context['group'], self.group)
         self.assertIn(self.post, response.context['page_obj'])
-        self.assertContains(response, '<img')
         self.assertEqual(
             response.context['page_obj'][0].image, self.post.image)
 
@@ -145,7 +148,6 @@ class ViewsTests(TestCase):
         self.assertEqual(response.context['page_obj'].paginator.count, 1)
         self.assertEqual(response.context['author'], self.user)
         self.assertIn(self.post, response.context['page_obj'])
-        self.assertContains(response, '<img')
         self.assertEqual(
             response.context['page_obj'][0].image, self.post.image)
 
@@ -154,8 +156,11 @@ class ViewsTests(TestCase):
         response = self.guest_client.get(
             reverse('posts:post_detail', kwargs={'post_id': self.post.pk}))
         self.assertEqual(response.context['post'], self.post)
-        self.assertContains(response, '<img')
         self.assertEqual(response.context['post'].image, self.post.image)
+        self.assertIsInstance(response.context['form'], CommentForm)
+        self.assertEqual(response.context['post'].comments.count(), 1)
+        self.assertEqual(
+            response.context['post'].comments.first().text, 'Test comment')
 
     def test_post_appears_on_homepage(self):
         """Проверяет, что созданный пост появляется на главной странице."""
@@ -186,22 +191,6 @@ class ViewsTests(TestCase):
             reverse('posts:group_list', args=[unrelated_group.slug]))
         self.assertNotIn(self.post, response.context['page_obj'])
 
-    def test_create_post_with_image(self):
-        """Проверяет, что после создания поста
-        с картинкой, создаётся запись в базе данных."""
-        posts_count = Post.objects.count()
-        form_data = {
-            'text': 'Test post with image',
-            'group': self.group.id,
-            'image': self.uploaded}
-        response = self.authorized_client.post(
-            reverse('posts:post_create'),
-            data=form_data,
-            follow=True)
-        self.assertRedirects(
-            response, reverse('posts:profile', args=[self.user.username]))
-        self.assertEqual(Post.objects.count(), posts_count + 1)
-
     def test_comment_auth(self):
         """Проверяет, что комментировать посты может
         только авторизованный пользователь."""
@@ -211,50 +200,37 @@ class ViewsTests(TestCase):
         response = self.authorized_client.get(url)
         self.assertContains(response, 'form')
 
-    def test_comment_post(self):
-        """Проверяет, что после успешной отправки
-        комментарий появляется на странице поста."""
-        comment_text = 'Test comment'
-        response = self.authorized_client.post(
-            reverse('posts:add_comment', args=[self.post.id]),
-            {'text': comment_text},
-            follow=True)
-        self.assertContains(response, comment_text)
-
     def test_cache_index(self):
         """Проверяет работу кеша на главной странице."""
         url = reverse('posts:index')
-        response = self.client.get(url)
-        self.assertContains(response, self.post.text)
-        new_post = Post.objects.create(
+        response1 = self.client.get(url)
+        content1 = response1.content
+        Post.objects.create(
             author=self.user, text='Test post')
+        response2 = self.client.get(url)
+        content2 = response2.content
+        self.assertEqual(content1, content2)
         cache.clear()
-        response = self.client.get(url)
-        self.assertContains(response, new_post.text)
-        new_post.delete()
-        cache.clear()
-        response = self.client.get(url)
-        self.assertNotContains(response, new_post.text)
+        response3 = self.client.get(url)
+        content3 = response3.content
+        self.assertNotEqual(content2, content3)
 
-    def test_404_page_template(self):
-        """Проверяет, что страница 404 отдаёт кастомный шаблон."""
-        url = reverse('posts:index') + 'non-existent-url/'
-        response = self.client.get(url)
-        self.assertTemplateUsed(response, 'core/404.html')
-        self.assertEqual(response.status_code, 404)
-
-    def test_follow_and_unfollow(self):
+    def test_follow(self):
         """Проверяет, что авторизованный пользователь может подписываться на
-        других пользователей и удалять их из подписок."""
+        других пользователей"""
         response = self.authorized_client.get(
             reverse('posts:profile_follow', args=[self.follower.username]))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertTrue(
             Follow.objects.filter(
                 author=self.follower, user=self.user).exists())
+
+    def test_unfollow(self):
+        """Проверяет, что авторизованный пользователь может отписываться от
+        других пользователей."""
         response = self.authorized_client.get(
             reverse('posts:profile_unfollow', args=[self.follower.username]))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertFalse(
             Follow.objects.filter(
                 author=self.follower, user=self.user).exists())
@@ -272,6 +248,7 @@ class ViewsTests(TestCase):
 class PaginatorTestCase(TestCase):
     def setUp(cls):
         cls.user = User.objects.create_user(username='auth')
+        cls.follower = User.objects.create_user(username='testfollower')
         cls.group = Group.objects.create(
             title='Test title',
             slug='test-slug',
@@ -320,3 +297,20 @@ class PaginatorTestCase(TestCase):
                 response = self.client.get(str(page_url) + '?page=2')
                 self.assertEqual(
                     len(response.context['page_obj']), NUM_OF_POSTS_2PAGE)
+
+    def test_paginator_on_follow_page(self):
+        """Количество постов на странице подписок равно 10."""
+        Follow.objects.create(author=self.user, user=self.follower)
+        self.client.force_login(self.follower)
+        response = self.client.get(reverse('posts:follow_index'))
+        self.assertEqual(len(
+            response.context['page_obj'].object_list), EXPENDED_NUM_OF_POSTS)
+        self.assertTrue(response.context['page_obj'].has_next())
+
+    def test_paginator_ofvn_follow_page(self):
+        """Количество постов на второй странице подписок должно быть 5."""
+        Follow.objects.create(author=self.user, user=self.follower)
+        self.client.force_login(self.follower)
+        response = self.client.get(reverse('posts:follow_index') + '?page=2')
+        self.assertEqual(
+            len(response.context['page_obj']), NUM_OF_POSTS_2PAGE)

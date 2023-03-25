@@ -1,6 +1,8 @@
+import re
+
 from django import forms
 
-from .models import Post, Comment
+from .models import Comment, Post
 
 
 class PostForm(forms.ModelForm):
@@ -12,7 +14,7 @@ class PostForm(forms.ModelForm):
         text = self.cleaned_data['text']
         stop_words = ['мат', 'война']
         for word in stop_words:
-            if word in text.lower():
+            if re.search(r'\b{}\b'.format(word), text.lower()):
                 raise forms.ValidationError(
                     f'Слово "{word}" запрещено в тексте поста')
         return text

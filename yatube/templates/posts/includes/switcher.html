@@ -2,20 +2,18 @@
   <div class="row my-3">
     <ul class="nav nav-tabs">
       <li class="nav-item">
-        <a 
-          class="nav-link {% if index %}active{% endif %}"
-          href="{% url 'posts:index' %}"
-        >
-          Все авторы
-        </a>
+        {% if request.resolver_match.url_name == 'index' %}
+          <a class="nav-link active" href="{% url 'posts:index' %}">Все авторы</a>
+        {% else %}
+          <a class="nav-link" href="{% url 'posts:index' %}">Все авторы</a>
+        {% endif %}
       </li>
       <li class="nav-item">
-        <a 
-           class="nav-link {% if follow %}active{% endif %}"
-           href="{% url 'posts:follow_index' %}"
-        >
-          Избранные авторы
-        </a>
+        {% if request.resolver_match.url_name == 'follow_index' %}
+         <a class="nav-link active" href="{% url 'posts:follow_index' %}">Избранные авторы </a>
+        {% else %}
+          <a class="nav-link" href="{% url 'posts:follow_index' %}">Избранные авторы </a>
+        {% endif %}
       </li>
     </ul>
   </div>
