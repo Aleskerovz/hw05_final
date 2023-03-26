@@ -50,7 +50,7 @@ def profile(request, username):
 
 def post_detail(request, post_id):
     post = get_object_or_404(Post, pk=post_id)
-    comments = post.comments.all()
+    comments = post.comments.select_related('post')
     form = CommentForm()
     context = {
         'post': post,
@@ -108,11 +108,9 @@ def add_comment(request, post_id):
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     page_obj = paginator(request=request, posts=posts)
-    context = {}
-    if page_obj is not None:
-        context = {
-            'page_obj': page_obj,
-        }
+    context = {
+        'page_obj': page_obj,
+    }
     return render(request, 'posts/follow.html', context)
 
 

@@ -144,9 +144,8 @@ class PostsTestCase(TestCase):
         comment_text = 'Test comment'
         response = self.authorized_client.post(
             reverse('posts:add_comment', args=[self.post.id]),
-            {'text': comment_text},
-            follow=True)
-        self.assertContains(response, comment_text)
+            {'text': comment_text})
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         comments_count = Comment.objects.count()
         self.assertEqual(comments_count, 1)
         comment = Comment.objects.first()
@@ -154,29 +153,33 @@ class PostsTestCase(TestCase):
         self.assertEqual(comment.post, self.post)
         self.assertEqual(comment.author, self.user)
 
-    def test_create_post_with_image(self):
-        """Валидная форма создает запись с изображением в базе данных."""
+    def test_guest_cannot_comment_post(self):
+        """Проверяет, что гость не может создать комментарий."""
+        comment_text = 'Test comment'
+        response = self.guest_client.post(
+            reverse('posts:add_comment', args=[self.post.id]),
+            {'text': comment_text})
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        comments_count = Comment.objects.count()
+        self.assertEqual(comments_count, 0)
+
+    def test_create_post_with_image_and_redirect(self):
+        """Валидная форма создает запись с изображением в базе данных
+        и пользователь будет перенаправлен на свой профиль."""
         initial_post_count = Post.objects.count()
-        response = self.authorized_client.post(reverse('posts:post_create'), {
+        form_data = {
             'text': 'Test post with image',
             'group': self.group.pk,
             'image': self.uploaded
-        }, follow=True)
+        }
+        response = self.authorized_client.post(
+            reverse('posts:post_create'), form_data, follow=True)
         self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertEqual(Post.objects.count(), initial_post_count + 1)
         post = Post.objects.first()
-        self.assertEqual(post.text, 'Test post with image')
+        self.assertEqual(post.text, form_data['text'])
         self.assertEqual(post.author, self.user)
         self.assertEqual(post.group, self.group)
-        self.assertTrue(post.image)
-
-    def test_redirect_post_with_image(self):
-        """Проверяет, что после создания поста с картинкой,
-        пользователь будет перенаправлен на свой профиль."""
-        response = self.authorized_client.post(reverse('posts:post_create'), {
-            'text': 'Test post with image',
-            'group': self.group.pk,
-            'image': self.uploaded
-        }, follow=True)
+        self.assertEqual(post.image.read(), self.small_gif)
         self.assertRedirects(
             response, reverse('posts:profile', args=[self.user.username]))
